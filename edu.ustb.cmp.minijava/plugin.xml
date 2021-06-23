@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="GBK"?>
+<?eclipse version="3.0"?>
+<plugin>
+	<extension point="org.eclipse.emf.ecore.generated_package">
+		<package
+			uri = "http://www.ustb.edu/cmp/MiniJava"
+			class = "edu.ustb.cmp.miniJava.MiniJavaPackage"
+			genModel = "model/generated/MiniJava.genmodel" />
+	</extension>
+</plugin>

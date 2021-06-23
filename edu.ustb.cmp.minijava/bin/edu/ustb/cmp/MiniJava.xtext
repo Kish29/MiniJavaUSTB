@@ -1,0 +1,209 @@
+grammar edu.ustb.cmp.MiniJava with org.eclipse.xtext.common.Terminals
+
+generate miniJava "http://www.ustb.edu/cmp/MiniJava"
+
+// 整个MiniJava文件的结构体定义，.mj文件
+/* package:类包定位 : PackageDef
+ * import*:导包内容
+ * MianClass:只执行主方法
+ * class: 其他class类定义
+ * */
+
+// mj文件结构定义，从上到下依次为: 
+// package描述
+// imports 描述
+// 主类固定声明
+// 其他类声明
+MiniJava :
+	package = PackageDecl
+	imports += ImportDecl*
+	mainclass = MainClassDecl
+	classes += ClassDecl*;
+
+// 基本全局定义
+// 包
+PackageDecl:
+	'package' name = QualifiedName ';'
+;
+
+// 导包
+ImportDecl:
+	'import' anchor = QualifiedName ';'
+;
+
+
+// 主类定义，执行主方法
+MainClassDecl:
+	{MainClassDecl} "class" ID "{"
+		"public" "static" "void" "main" "(" "String" "[" "]" name=ID ")" "{"
+			statements += Statement*
+		"}"
+	"}"
+;
+
+// 其他类定义
+ClassDecl:
+	"class" name = ID ("extends" superClass=[ClassDecl | QualifiedName])? ("implements" implementz += [ClassDecl | QualifiedName] )? "{"
+		members += Member*
+	"}"
+;
+
+// 合法名称定义
+QualifiedName:
+	ID ('.' ID)*
+;
+
+// 浮点数表示方法
+DoubleLiteral:
+	INT'.'INT
+;
+
+// 常量定义
+ConstantValue:
+	STRING | INT | DoubleLiteral
+;
+
+// 4个基本数据类型
+BasicDataType:
+	"int" | "boolean" | "double" | "char" | "long" 
+;
+
+// DataType：普通变量或数组
+DataType:
+	 BasicDataType | QualifiedName | BasicDataType "[" "]"
+;
+
+// 变量定义
+// eg: int a;
+VariableDecl:
+	varType = DataType name = ID ("=")? value=ConstantValue? ";"
+;
+
+// 方法体作用域
+enum Domain:
+	PUBLIC="public" | PRIVATE="private" | PROTECTED="protected"
+;
+
+// 额外属性
+enum ExtraAttr:
+	STATIC="static" | ABSTRACT="abstract"
+;
+
+// 返回类型
+ReturnType:
+	DataType | "void"
+;
+
+// 参数类型
+Parameter:
+	type=DataType name=ID ","?
+;
+
+// 方法体定义
+// eg: public void max(int a, int b) {
+// 		...
+// }
+MethodDecl:
+	domain = Domain extra=(ExtraAttr)? retType=ReturnType name=ID "("(params += Parameter)*")" "{"
+		statements += Statement*
+	"}"
+;
+
+// 类成员定义: 变量和方法体
+Member:
+	VariableDecl | MethodDecl
+;
+
+// 代码陈述语句
+/* return
+ * int a
+ * a = 0
+ * a = a * 2
+ * if (a = 0)
+ * while ()
+ * for
+ * */
+Statement:
+	 varDef=VariableDecl |assign=Assignments | ifStat=IfStatements | whileStat=WhileStatements | retStat=ReturnStatements
+;
+
+// 左值表达式
+LValueExp:
+	id=ID | exp=Expression "." id=QualifiedName| exp=Expression"["index = Expression"]"
+;
+
+
+// 赋值语句
+Assignments:
+	leftValue=LValueExp "=" expression=Expression ";"
+;
+
+// 判断语句
+IfStatements:
+	"if" "("Expression")" "{"
+		statements += Statement*
+	"}" elseIf += ElseIfStatements*
+	else += ElseStatement*
+;
+
+// else if () {}
+ElseIfStatements:
+	"else" "if" "("Expression")" "{"
+		statements += Statement*
+	"}"
+;
+
+// else {}
+ElseStatement:
+	{ElseStatement} "else" "{"
+		statements += Statement*
+	"}"
+;
+
+// while循环
+WhileStatements:
+	"while" "("Expression")" "{"
+		statements += Statement*
+	"}"
+;
+
+ReturnStatements:
+	"return" exp=Expression ";"
+;
+
+// 操作符
+Operator:
+	"!" | "&" | "|" | "+" |  "-" |"*" |"%" |"<<" |">>" |"==" |"!=" | ">=" |"<=" |">" |"<"
+;
+
+// 计算表达式
+CalcExp:
+	leftName=ID | leftNum=INT op=Operator rightName=ID | rightNum=INT;
+	
+enum BooleanExp:
+	TRUE="true" | FALSE="false"
+;
+
+// 比较式子
+CompareExp:
+	id=QualifiedName op=Operator other1+=ID* other2+="null"*
+;
+
+BasicJudge:
+	bE=BooleanExp | cmp=CompareExp
+;
+
+// 判断式
+JudgeExp:
+	"!"* "("* bj=BasicJudge ")"*
+;
+
+// 创建对象表达式
+NewExp:
+	"new" name=ID "("(params+=Parameter)*")"
+;
+
+// 表达式
+Expression:
+	const=ConstantValue | ce=CalcExp | je=JudgeExp | ne=NewExp
+;
