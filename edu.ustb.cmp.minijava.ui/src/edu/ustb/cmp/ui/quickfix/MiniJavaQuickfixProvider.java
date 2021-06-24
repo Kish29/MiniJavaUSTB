@@ -3,24 +3,281 @@
  */
 package edu.ustb.cmp.ui.quickfix;
 
+import java.util.HashMap;
+import java.util.Random;
+
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.xtext.nodemodel.INode;
+import org.eclipse.xtext.nodemodel.util.NodeModelUtils;
+import org.eclipse.xtext.resource.EObjectAtOffsetHelper;
+import org.eclipse.xtext.resource.XtextResource;
+import org.eclipse.xtext.ui.editor.model.IXtextDocument;
+import org.eclipse.xtext.ui.editor.model.edit.IModification;
+import org.eclipse.xtext.ui.editor.model.edit.IModificationContext;
 import org.eclipse.xtext.ui.editor.quickfix.DefaultQuickfixProvider;
+import org.eclipse.xtext.ui.editor.quickfix.Fix;
+import org.eclipse.xtext.ui.editor.quickfix.IssueResolutionAcceptor;
+import org.eclipse.xtext.util.concurrent.IUnitOfWork;
+import org.eclipse.xtext.validation.Issue;
+
+import edu.ustb.cmp.miniJava.ClassDecl;
+import edu.ustb.cmp.miniJava.Member;
+import edu.ustb.cmp.miniJava.impl.ClassDeclImpl;
+import edu.ustb.cmp.miniJava.impl.MethodDeclImpl;
+import edu.ustb.cmp.miniJava.impl.MiniJavaImpl;
+import edu.ustb.cmp.miniJava.impl.VariableDeclImpl;
+import edu.ustb.cmp.validation.MiniJavaValidator;
 
 /**
  * Custom quickfixes.
  *
- * See https://www.eclipse.org/Xtext/documentation/310_eclipse_support.html#quick-fixes
+ * See
+ * https://www.eclipse.org/Xtext/documentation/310_eclipse_support.html#quick-fixes
  */
+// quick fix
 public class MiniJavaQuickfixProvider extends DefaultQuickfixProvider {
 
-//	@Fix(MiniJavaValidator.INVALID_NAME)
-//	public void capitalizeName(final Issue issue, IssueResolutionAcceptor acceptor) {
-//		acceptor.accept(issue, "Capitalize name", "Capitalize the name.", "upcase.png", new IModification() {
-//			public void apply(IModificationContext context) throws BadLocationException {
-//				IXtextDocument xtextDocument = context.getXtextDocument();
-//				String firstLetter = xtextDocument.get(issue.getOffset(), 1);
-//				xtextDocument.replace(issue.getOffset(), 1, firstLetter.toUpperCase());
-//			}
-//		});
-//	}
+	private Random renameRandom = new Random();
+	private static final int scope = 99;
+
+	// 父类重名快速修正
+	@Fix(MiniJavaValidator.ERR_LOOP_SUPER)
+	public void removeClassConflictWithSuper(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Rename loop class name", "Remove the class ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument xtextDocument = context.getXtextDocument();
+				String org = xtextDocument.get(issue.getOffset(), issue.getLength());
+				xtextDocument.replace(issue.getOffset(), issue.getLength(), org + "_" + renameRandom.nextInt(scope));
+			}
+		});
+	}
+
+	// 添加返回语句
+	@Fix(MiniJavaValidator.ERR_NO_RET)
+	public void addReturnStatement(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Add return statement", "Add return statement ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument xtextDocument = context.getXtextDocument();
+				xtextDocument.readOnly(new IUnitOfWork.Void<XtextResource>() {
+
+					@Override
+					public void process(XtextResource state) throws Exception {
+						// affectedObject是出错的object
+						EObject affectedObject = state.getEObject(issue.getUriToProblem().fragment());
+						EObjectAtOffsetHelper offseter = new EObjectAtOffsetHelper();
+						int offSet = -1;
+						if (affectedObject != null) {
+							// 定位statement到最后一条
+							for (INode child : NodeModelUtils.getNode(affectedObject).getLeafNodes()) {
+								if (child.getText().equals("}") && child.getOffset() > offSet) {
+									offSet = child.getOffset();
+								}
+							}
+							if (offSet != -1) {
+								MethodDeclImpl mip = (MethodDeclImpl) offseter.resolveElementAt(state,
+										NodeModelUtils.getNode(affectedObject).getOffset());
+								String returnValue;
+								switch (mip.getRetType()) {
+								case "int":
+								case "long":
+									returnValue = "0";
+									break;
+								case "char":
+									returnValue = "\0";
+									break;
+								case "boolean":
+									returnValue = "false";
+									break;
+								case "double":
+									returnValue = "0.0";
+									break;
+								default:
+									returnValue = "null";
+									break;
+								}
+								xtextDocument.replace(offSet, 1, "    return " + returnValue + ";\n}");
+
+							}
+						}
+					}
+
+				});
+			}
+		});
+	}
+
+	// 返回值类型错误
+	@Fix(MiniJavaValidator.ERR_RET_TYPE)
+	public void changeReturnValueType(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Change Return type ", "Change the return type ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument xtextDocument = context.getXtextDocument();
+				xtextDocument.readOnly(new IUnitOfWork.Void<XtextResource>() {
+					@Override
+					public void process(XtextResource state) throws Exception {
+						EObject affectedObject = state.getEObject(issue.getUriToProblem().fragment());
+						EObjectAtOffsetHelper offseter = new EObjectAtOffsetHelper();
+						int maxoff = -1;
+						if (affectedObject != null) {
+							for (INode child : NodeModelUtils.getNode(affectedObject).getLeafNodes()) {
+								if (child.getText().equals("}")) {
+									if (child.getOffset() > maxoff)
+										maxoff = child.getOffset();
+								}
+							}
+
+							if (maxoff == -1)
+								return;
+							else {
+								MethodDeclImpl mip = (MethodDeclImpl) offseter.resolveElementAt(state,
+										NodeModelUtils.getNode(affectedObject).getOffset());
+								String returnValue;
+								switch (mip.getRetType()) {
+								case "int":
+								case "long":
+									returnValue = "0";
+									break;
+								case "char":
+									returnValue = "\0";
+									break;
+								case "boolean":
+									returnValue = "false";
+									break;
+								case "double":
+									returnValue = "0.0";
+									break;
+								default:
+									returnValue = "null";
+									break;
+								}
+								xtextDocument.replace(maxoff + ("return".length()), 1, " " + returnValue + ";\n}");
+
+							}
+						}
+					}
+
+				});
+			}
+		});
+	}
+
+	// 类重命名
+	@Fix(MiniJavaValidator.ERR_DUPLICATE_CLASS_DECL)
+	public void renameClassName(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Rename class name", "Rename the class ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument xtextDocument = context.getXtextDocument();
+				xtextDocument.readOnly(new IUnitOfWork.Void<XtextResource>() {
+					@Override
+					public void process(XtextResource resource) throws Exception {
+						EObject affectedObject = resource.getEObject(issue.getUriToProblem().fragment());
+						if (affectedObject instanceof MiniJavaImpl) {
+							HashMap<String, Integer> names = new HashMap<>();
+							MiniJavaImpl mji = (MiniJavaImpl) affectedObject;
+							for (ClassDecl cdi : mji.getClasses()) {
+								if (names.get(cdi.getName()) != null) {
+									// 定位
+									String replace = cdi.getName() + "_" + renameRandom.nextInt(scope);
+									int ofst = NodeModelUtils.getNode(cdi).getOffset();
+									xtextDocument.replace(ofst, replace.length(), replace);
+								}
+							}
+						}
+					}
+				});
+
+			}
+		});
+	}
+
+	// 变量重命名
+	@Fix(MiniJavaValidator.ERR_DUPLICATE_FIELD)
+	public void renameFiledNameWithDuplicate(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Rename variable", "Rename variable name ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument xtextDocument = context.getXtextDocument();
+				xtextDocument.readOnly(new IUnitOfWork.Void<XtextResource>() {
+					@Override
+					public void process(XtextResource resource) throws Exception {
+						EObject affectedObject = resource.getEObject(issue.getUriToProblem().fragment());
+						EObjectAtOffsetHelper offseter = new EObjectAtOffsetHelper();
+						EObject object = offseter.resolveElementAt(resource,
+								NodeModelUtils.getNode(affectedObject).getOffset()
+										+ NodeModelUtils.getNode(affectedObject).getLength());
+						if (object instanceof MethodDeclImpl) {
+							// 重名是类中定义
+						} else if (object instanceof ClassDeclImpl) {
+							ClassDeclImpl cdi = (ClassDeclImpl) object;
+							for (Member m : cdi.getMembers()) {
+								if (m instanceof VariableDeclImpl) {
+									xtextDocument.replace(issue.getOffset() + issue.getLength(), 3,
+											"_" + renameRandom.nextInt(scope));
+								}
+							}
+						}
+					}
+				});
+			}
+		});
+	}
+
+	// 重复函数名
+	@Fix(MiniJavaValidator.ERR_DUPLICATE_FUNC)
+	public void renameMethodWithDuplicate(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Change method name ", "Change method name ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument iXtextDocument = context.getXtextDocument();
+				iXtextDocument.replace(issue.getOffset() + issue.getLength(), 3, "_" + renameRandom.nextInt(scope));
+			}
+		});
+	}
+
+	// 类型赋值
+	@Fix(MiniJavaValidator.ERR_ASSIGNMENT_TYPE)
+	public void reassignElementWithWrongType(final Issue issue, IssueResolutionAcceptor acceptor) {
+		acceptor.accept(issue, "Wrong assignment", "cast type to match ", null, new IModification() {
+			@Override
+			public void apply(IModificationContext context) throws Exception {
+				IXtextDocument iXtextDocument = context.getXtextDocument();
+				iXtextDocument.readOnly(new IUnitOfWork.Void<XtextResource>() {
+
+					@Override
+					public void process(XtextResource state) throws Exception {
+						EObject affectedObj = state.getEObject(issue.getUriToProblem().fragment());
+						if (affectedObj instanceof VariableDeclImpl) {
+							VariableDeclImpl vdi = (VariableDeclImpl) affectedObj;
+							StringBuilder sb = new StringBuilder();
+							String org = iXtextDocument.get(issue.getOffset(), issue.getLength());
+							switch (vdi.getVarType()) {
+							case "int":
+								sb.append("(int) ");
+								break;
+							case "long":
+								sb.append("(long) ");
+								break;
+							case "double":
+								sb.append("(double) ");
+								break;
+							case "boolean":
+								sb.append("(boolean) ");
+								break;
+							default:
+								break;
+							}
+							String replace = sb.append(org).toString();
+							iXtextDocument.replace(issue.getOffset(), replace.length(), replace);
+						}
+					}
+
+				});
+			}
+		});
+	}
 
 }
