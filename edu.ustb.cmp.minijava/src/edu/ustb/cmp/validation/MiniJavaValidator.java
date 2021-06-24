@@ -5,7 +5,10 @@ package edu.ustb.cmp.validation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.eclipse.xtext.validation.Check;
@@ -50,6 +53,9 @@ public class MiniJavaValidator extends AbstractMiniJavaValidator {
 	private static final String DOUBLE_PATTERN = "^(-)?[1-9]\\d{0,9}(\\.)\\d{1,9}$";
 	private static final Pattern DOUBLE_PATTER = Pattern.compile(DOUBLE_PATTERN);;
 
+	// 保存单个mj文件的所有类名
+	private Set<String> classNames = new HashSet();
+
 	// 重复父类名称检查
 	@Check
 	public void checkLoopSuperErr(ClassDecl classDecl) {
@@ -86,19 +92,19 @@ public class MiniJavaValidator extends AbstractMiniJavaValidator {
 					if (exp.getConst() != null) {
 						switch (methodDecl.getRetType()) {
 						case "int":
-							if (!INT_PATTER.matcher(exp.getConst()).matches()) {
+							if (!exp.getConst().equals("0") && !INT_PATTER.matcher(exp.getConst()).matches()) {
 								error(ERR_RET_TYPE + " with return type " + exp.getConst() + " in method "
 										+ methodDecl.getName(), null, ERR_RET_TYPE);
 							}
 							break;
 						case "long":
-							if (!LONG_PATTER.matcher(exp.getConst()).matches()) {
+							if (!exp.getConst().equals("0") && !LONG_PATTER.matcher(exp.getConst()).matches()) {
 								error(ERR_RET_TYPE + " with return type " + exp.getConst() + " in method "
 										+ methodDecl.getName(), null, ERR_RET_TYPE);
 							}
 							break;
 						case "double":
-							if (!DOUBLE_PATTER.matcher(exp.getConst()).matches()) {
+							if (!exp.getConst().equals("0.0") && !DOUBLE_PATTER.matcher(exp.getConst()).matches()) {
 								error(ERR_RET_TYPE + " with return type " + exp.getConst() + " in method "
 										+ methodDecl.getName(), null, ERR_RET_TYPE);
 							}
@@ -117,12 +123,12 @@ public class MiniJavaValidator extends AbstractMiniJavaValidator {
 		var allClasses = miniJava.getClasses();
 		HashMap<String, Integer> recorder = new HashMap<>();
 		for (int i = 0; i < allClasses.size(); i++) {
-			var name = allClasses.get(i).getName();
+			String name = allClasses.get(i).getName();
 			if (recorder.get(name) != null) {
 				error(ERR_DUPLICATE_CLASS_DECL + " with " + name, null, ERR_DUPLICATE_CLASS_DECL);
 				recorder.put(name, recorder.get(name) + 1);
 			} else {
-				recorder.put(name, 0);
+				recorder.put(name, 1);
 			}
 		}
 	}

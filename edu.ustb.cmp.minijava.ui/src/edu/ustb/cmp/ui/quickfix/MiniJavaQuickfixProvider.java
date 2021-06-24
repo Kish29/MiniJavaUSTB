@@ -43,12 +43,12 @@ public class MiniJavaQuickfixProvider extends DefaultQuickfixProvider {
 	// 父类重名快速修正
 	@Fix(MiniJavaValidator.ERR_LOOP_SUPER)
 	public void removeClassConflictWithSuper(final Issue issue, IssueResolutionAcceptor acceptor) {
-		acceptor.accept(issue, "Rename loop class name", "Remove the class ", null, new IModification() {
+		acceptor.accept(issue, "Remove loop extend", "Remove the extend class ", null, new IModification() {
 			@Override
 			public void apply(IModificationContext context) throws Exception {
 				IXtextDocument xtextDocument = context.getXtextDocument();
-				String org = xtextDocument.get(issue.getOffset(), issue.getLength());
-				xtextDocument.replace(issue.getOffset(), issue.getLength(), org + "_" + renameRandom.nextInt(scope));
+				xtextDocument.replace(issue.getOffset() + issue.getLength(), "extends".length() + 2 + issue.getLength(),
+						"");
 			}
 		});
 	}
